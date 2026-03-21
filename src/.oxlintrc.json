@@ -14,7 +14,6 @@
   },
   "rules": {
     "no-useless-constructor": "off",
-    "no-underscore-dangle": "off",
     "no-use-before-define": "off",
     "dot-notation": "off",
 
@@ -23,7 +22,7 @@
     "@typescript-eslint/explicit-function-return-type": "off",
     "@typescript-eslint/explicit-module-boundary-types": "off",
     "@typescript-eslint/no-empty-object-type": "off",
-    "@typescript-eslint/no-empty-function": ["error", { "allow": ["arrowFunctions"] }],
+    "no-empty-function": "off",
     "@typescript-eslint/consistent-type-imports": ["error", {
       "prefer": "type-imports",
       "disallowTypeAnnotations": false
@@ -32,7 +31,6 @@
     "react/prop-types": "off",
     "react/react-in-jsx-scope": "off",
     "react/jsx-pascal-case": "error",
-    "react/jsx-newline": "warn",
     "react-hooks/rules-of-hooks": "error",
     "react-hooks/exhaustive-deps": "error",
     "react/only-export-components": "warn"
