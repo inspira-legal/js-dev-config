@@ -13,7 +13,7 @@ pnpm config set //npm.pkg.github.com/:_authToken=<YOUR_GITHUB_TOKEN>
 Install:
 
 ```sh
-pnpm add -D @inspira-legal/dev-config
+pnpm add -D @inspira-legal/dev-config oxlint oxfmt cspell
 ```
 
 ## Usage
@@ -38,13 +38,22 @@ Create `.oxlintrc.json` in your project:
       "localesDir": "src/lib/i18n/locales",
       "sourceDir": "src"
     }]
-  }
+  },
+  "overrides": [
+    {
+      "files": ["**/*.{spec,test}.{ts,tsx}", "tests/**/*.{ts,tsx}"],
+      "rules": {
+        "@inspira-legal/i18n/no-literal-string": "off",
+        "react/only-export-components": "off"
+      }
+    }
+  ]
 }
 ```
 
 ### oxfmt
 
-Create `.oxfmtrc.json` in your project, extending the base settings:
+oxfmt does not support `extends`. Copy the base settings from `src/.oxfmtrc.json` and add your app-specific options (tailwind, import sorting):
 
 ```json
 {
@@ -84,6 +93,19 @@ In your `tsconfig.json`:
     "target": "ESNext",
     "module": "ESNext",
     "jsx": "react-jsx"
+  }
+}
+```
+
+### Scripts
+
+```json
+{
+  "scripts": {
+    "lint": "oxfmt . && oxlint --fix --deny-warnings .",
+    "lint:check": "oxfmt --check . && oxlint --deny-warnings .",
+    "spell:check": "cspell \"src/**/*.{ts,tsx}\"",
+    "format": "oxfmt ."
   }
 }
 ```
