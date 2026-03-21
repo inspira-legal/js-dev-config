@@ -1,4 +1,4 @@
-name: Lint
+name: Validate
 
 on:
   pull_request:
@@ -7,24 +7,24 @@ on:
       - main
 
 jobs:
-  lint:
-    name: Linting
+  test:
+    name: Test
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
 
       - name: Set Node.js Version
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version-file: '.nvmrc'
-          cache: 'yarn'
+          cache: 'pnpm'
 
       - name: Install Dependencies
-        run: yarn install --frozen-lockfile --prefer-offline
+        run: pnpm install --frozen-lockfile --prefer-offline
 
-      - name: Run type checking
-        run: yarn run type-check
-
-      - name: Run linting
-        run: yarn run lint
+      - name: Run Tests
+        run: pnpm test

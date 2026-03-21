@@ -1,27 +1,104 @@
-<h1 align="center">
-    NPM Config Packages
-</h1>
+# @inspira-legal/dev-config
 
-## Como usar os pacotes
+Shared dev config for Inspira Legal projects: oxlint, oxfmt, tsconfig, and i18n oxlint plugin.
 
-Primeiro precisamos gerar um token de acesso do github para os pacotes. Esse token deve ser criado individualmente por usuário, e para isso basta seguir o caminho:
+## Setup
 
-Github > Settings > Developer Settings > Personal Access Tokens > Tokens (Classic)
+Configure GitHub Packages auth:
 
-No scopo do token basta setar acesso de leitura de pacotes "read:packages", e gerar o token!
-
-Após gerar o token, precisamos configurar o arquivo `.npmrc` na raiz do projeto com o conteúdo:
-
-```
-registry=https://registry.npmjs.org
-@inspira-legal:registry=https://npm.pkg.github.com
-//npm.pkg.github.com/:_authToken=<ACCESS_TOKEN>
+```sh
+pnpm config set //npm.pkg.github.com/:_authToken=<YOUR_GITHUB_TOKEN>
 ```
 
-> Lembrando que esse arquivo _deve_ estar listado no `.gitignore`.
+Install:
 
-E ta pronto o sorvetinho! Agora comandos como `yarn add -D @inspira-legal/<pacote>` já devem funcionar :)
+```sh
+pnpm add -D @inspira-legal/dev-config
+```
 
-Não esquece de configurar o CI! Lá o access token é o `GITHUB_TOKEN`! 😛
+## Usage
 
-Ao usar o [Setup Node](https://github.com/actions/setup-node) checar [docs](https://github.com/actions/setup-node#usage).
+### oxlint
+
+Create `.oxlintrc.json` in your project:
+
+```json
+{
+  "extends": ["./node_modules/@inspira-legal/dev-config/src/.oxlintrc.json"],
+  "jsPlugins": ["./node_modules/@inspira-legal/dev-config/plugins/i18n.mjs"],
+  "ignorePatterns": ["src/generated/"],
+  "rules": {
+    "@inspira-legal/i18n/no-literal-string": "warn",
+    "@inspira-legal/i18n/enforce-keys-sync": ["warn", {
+      "baseLocale": "pt-BR",
+      "localesDir": "src/lib/i18n/locales"
+    }],
+    "@inspira-legal/i18n/no-unused-keys": ["warn", {
+      "baseLocale": "pt-BR",
+      "localesDir": "src/lib/i18n/locales",
+      "sourceDir": "src"
+    }]
+  }
+}
+```
+
+### oxfmt
+
+Create `.oxfmtrc.json` in your project, extending the base settings:
+
+```json
+{
+  "useTabs": false,
+  "tabWidth": 2,
+  "semi": false,
+  "singleQuote": true,
+  "bracketSpacing": true,
+  "printWidth": 100,
+  "arrowParens": "always",
+  "trailingComma": "all",
+  "bracketSameLine": false,
+  "jsxSingleQuote": true,
+  "endOfLine": "lf",
+  "sortTailwindcss": {
+    "stylesheet": "./src/your-tailwind.css",
+    "functions": ["clsx", "cx", "cva"]
+  },
+  "sortImports": {
+    "groups": ["builtin", "external", ["internal", "subpath"], ["parent", "sibling", "index"], "style", "unknown"],
+    "newlinesBetween": true,
+    "order": "asc",
+    "ignoreCase": true,
+    "internalPattern": ["@/"]
+  }
+}
+```
+
+### tsconfig
+
+In your `tsconfig.json`:
+
+```json
+{
+  "extends": "@inspira-legal/dev-config/src/tsconfig.json",
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "jsx": "react-jsx"
+  }
+}
+```
+
+## i18n Plugin Rules
+
+| Rule | Description |
+|------|-------------|
+| `@inspira-legal/i18n/no-literal-string` | Detects untranslated strings in JSX |
+| `@inspira-legal/i18n/enforce-keys-sync` | Ensures locale JSON files are in sync across locales |
+| `@inspira-legal/i18n/no-unused-keys` | Detects translation keys not referenced in source code |
+
+## Development
+
+```sh
+pnpm install
+pnpm test
+```

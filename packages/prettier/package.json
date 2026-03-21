@@ -1,9 +1,0 @@
-{
-  "name": "@inspira-legal/prettier",
-  "version": "0.4.0",
-  "license": "MIT",
-  "main": ".prettierrc.json",
-  "publishConfig": {
-    "registry": "https://npm.pkg.github.com/"
-  }
-}
