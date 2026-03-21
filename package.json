@@ -9,7 +9,10 @@
     "node": ">=24"
   },
   "files": [
-    "src/",
+    "tsconfig.json",
+    "cspell.json",
+    ".oxlintrc.json",
+    ".oxfmtrc.json",
     "plugins/"
   ],
   "scripts": {

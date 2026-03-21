@@ -24,7 +24,7 @@ Create `.oxlintrc.json` in your project:
 
 ```json
 {
-  "extends": ["./node_modules/@inspira-legal/dev-config/src/.oxlintrc.json"],
+  "extends": ["./node_modules/@inspira-legal/dev-config/.oxlintrc.json"],
   "jsPlugins": ["./node_modules/@inspira-legal/dev-config/plugins/i18n.mjs"],
   "ignorePatterns": ["src/generated/"],
   "rules": {
@@ -53,7 +53,7 @@ Create `.oxlintrc.json` in your project:
 
 ### oxfmt
 
-oxfmt does not support `extends`. Copy the base settings from `src/.oxfmtrc.json` and add your app-specific options (tailwind, import sorting):
+oxfmt does not support `extends`. Copy the base settings from `.oxfmtrc.json` and add your app-specific options (tailwind, import sorting):
 
 ```json
 {
@@ -88,7 +88,7 @@ In your `tsconfig.json`:
 
 ```json
 {
-  "extends": "@inspira-legal/dev-config/src/tsconfig.json",
+  "extends": "@inspira-legal/dev-config/tsconfig.json",
   "compilerOptions": {
     "target": "ESNext",
     "module": "ESNext",
@@ -103,7 +103,7 @@ Create `cspell.json` in your project:
 
 ```json
 {
-  "import": ["@inspira-legal/dev-config/src/cspell.json"],
+  "import": ["@inspira-legal/dev-config/cspell.json"],
   "words": ["your-project-specific-words"]
 }
 ```

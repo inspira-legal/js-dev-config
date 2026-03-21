@@ -3,10 +3,9 @@ import { readFileSync, existsSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 const root = resolve(import.meta.dirname, '..')
-const src = resolve(root, 'src')
 
 function readJson(relativePath: string) {
-  return JSON.parse(readFileSync(resolve(src, relativePath), 'utf-8'))
+  return JSON.parse(readFileSync(resolve(root, relativePath), 'utf-8'))
 }
 
 describe('.oxlintrc.json', () => {
@@ -113,8 +112,10 @@ describe('package.json', () => {
     expect(pkg.name).toBe('@inspira-legal/dev-config')
   })
 
-  it('publishes src/ directory', () => {
-    expect(pkg.files).toContain('src/')
+  it('publishes config files', () => {
+    expect(pkg.files).toContain('tsconfig.json')
+    expect(pkg.files).toContain('cspell.json')
+    expect(pkg.files).toContain('plugins/')
   })
 
   it('publishes to GitHub Packages', () => {
