@@ -73,14 +73,10 @@ function listJsonFiles(localeDir) {
  * @returns {string | null}
  */
 function resolveLocalesDir(localesDir, filename) {
-  // Walk up from the linted file to find the project root.
-  // Heuristic: look for package.json or node_modules.
+  // Walk up from the linted file to find the project root via package.json.
   let dir = path.dirname(filename)
   for (let i = 0; i < 20; i++) {
-    if (
-      fs.existsSync(path.join(dir, 'package.json')) ||
-      fs.existsSync(path.join(dir, 'node_modules'))
-    ) {
+    if (fs.existsSync(path.join(dir, 'package.json'))) {
       const resolved = path.join(dir, localesDir)
       return fs.existsSync(resolved) ? resolved : null
     }
@@ -100,10 +96,16 @@ function isTechnicalString(str) {
   const trimmed = str.trim()
   if (trimmed.length === 0) return true
   if (trimmed.length <= 1) return true
-  // UPPER_CASE constants
-  if (/^[A-Z][A-Z0-9_]+$/.test(trimmed)) return true
-  // camelCase/PascalCase identifiers (no spaces)
-  if (/^[a-zA-Z_$][a-zA-Z0-9_$.]*$/.test(trimmed) && !trimmed.includes(' ')) return true
+  // Short all-caps acronyms (e.g. API, URL, HTML — 2-5 chars)
+  if (/^[A-Z]{2,5}$/.test(trimmed)) return true
+  // UPPER_CASE constants (require underscore to avoid matching repeated letters)
+  if (/^[A-Z][A-Z0-9_]*_[A-Z0-9_]*$/.test(trimmed)) return true
+  // camelCase identifiers (start lowercase with at least one uppercase)
+  if (/^[a-z][a-zA-Z0-9]*[A-Z][a-zA-Z0-9]*$/.test(trimmed)) return true
+  // PascalCase identifiers (e.g. MyComponent, FileReader — requires internal case transition)
+  if (/^[A-Z][a-z]+[A-Z][a-zA-Z0-9]*$/.test(trimmed)) return true
+  // Identifiers with special chars (_, $, .)
+  if (/^[a-zA-Z_$][a-zA-Z0-9_$.]*$/.test(trimmed) && /[_$.]/.test(trimmed)) return true
   // kebab-case
   if (/^[a-z][a-z0-9-]*$/.test(trimmed)) return true
   // Numbers only
@@ -117,15 +119,15 @@ function isTechnicalString(str) {
   // CSS values (px, rem, em, %, vh, vw)
   if (/^\d+(\.\d+)?(px|rem|em|%|vh|vw|ch|dvh|svh)$/.test(trimmed)) return true
   // Only special characters / punctuation / HTML entities
-  if (/^[^a-zA-Z\u00C0-\u024F\u0400-\u04FF\u4e00-\u9fff]+$/.test(trimmed)) return true
+  if (/^[^a-zA-Z\u00C0-\u024F\u0400-\u04FF\u4e00-\u9fff\uAC00-\uD7AF\u3040-\u309F\u30A0-\u30FF]+$/.test(trimmed)) return true
   // Template expression placeholders
   if (/^\{\{.*\}\}$/.test(trimmed)) return true
   // HTML entities
   if (/^&[a-z]+;$/i.test(trimmed)) return true
   // CSS !important
   if (trimmed === '!important') return true
-  // Tailwind-like class strings (space-separated words with dashes, brackets, colons, slashes)
-  if (/^[a-z0-9[\]/:!@#._-]+(\s+[a-z0-9[\]/:!@#._-]+)*$/i.test(trimmed) && trimmed.includes('-')) return true
+  // Tailwind-like class strings (space-separated words with dashes, brackets, colons, slashes, or ! prefix)
+  if (/^[a-z0-9[\]/:!@#._-]+(\s+[a-z0-9[\]/:!@#._-]+)*$/i.test(trimmed) && (trimmed.includes('-') || trimmed.includes('!'))) return true
   return false
 }
 
@@ -306,6 +308,13 @@ const noLiteralString = {
       })
     }
 
+    function isTechnicalAttrContainer(containerNode) {
+      const attr = containerNode?.parent
+      if (attr?.type !== 'JSXAttribute') return false
+      const attrName = attr.name?.name
+      return TECHNICAL_JSX_ATTRS.has(attrName) || extraIgnoreAttrs.has(attrName)
+    }
+
     return {
       JSXText(node) {
         const text = node.value.trim()
@@ -332,6 +341,7 @@ const noLiteralString = {
         }
 
         if (parent?.type === 'JSXExpressionContainer') {
+          if (isTechnicalAttrContainer(parent)) return
           reportLiteral(node, value)
           return
         }
@@ -340,6 +350,7 @@ const noLiteralString = {
           let current = parent
           while (current.parent) {
             if (current.parent.type === 'JSXExpressionContainer') {
+              if (isTechnicalAttrContainer(current.parent)) return
               reportLiteral(node, value)
               return
             }
@@ -362,6 +373,7 @@ const noLiteralString = {
         let current = node.parent
         while (current) {
           if (current.type === 'JSXExpressionContainer') {
+            if (isTechnicalAttrContainer(current)) return
             const fullText = node.quasis.map((q) => q.value.raw).join('...')
             reportLiteral(node, fullText)
             return
@@ -662,6 +674,11 @@ const plugin = {
     'enforce-keys-sync': enforceKeysSync,
     'no-unused-keys': noUnusedKeys,
   },
+}
+
+export function _resetForTesting() {
+  syncCheckedDirs.clear()
+  unusedCheckedDirs.clear()
 }
 
 export default plugin

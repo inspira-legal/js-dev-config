@@ -4,10 +4,17 @@ import { mkdirSync, writeFileSync, rmSync } from 'node:fs'
 
 const pluginPath = resolve(import.meta.dirname, '..', 'plugins', 'i18n.mjs')
 
-// Fresh import each time to reset module-level state (syncCheckedDirs, unusedCheckedDirs)
+let _plugin: any
+let _resetForTesting: () => void
+
 async function loadPlugin() {
-  const mod = await import(`${pluginPath}?t=${Date.now()}`)
-  return mod.default
+  if (!_plugin) {
+    const mod = await import(pluginPath)
+    _plugin = mod.default
+    _resetForTesting = mod._resetForTesting
+  }
+  _resetForTesting()
+  return _plugin
 }
 
 // ─── Mock Context Factory ────────────────────────────────────────────────────
@@ -128,6 +135,44 @@ function binaryInJSX(child: any) {
   const container = makeNode('JSXExpressionContainer')
   binary.parent = container
   return child
+}
+
+function jsxExprContainerInAttr(attrName: string, child: any) {
+  const container = makeNode('JSXExpressionContainer')
+  child.parent = container
+  const attr = makeNode('JSXAttribute', { name: { name: attrName } })
+  container.parent = attr
+  return child
+}
+
+function binaryInJSXAttr(attrName: string, child: any) {
+  const binary = makeNode('BinaryExpression', { operator: '+' })
+  child.parent = binary
+  const container = makeNode('JSXExpressionContainer')
+  binary.parent = container
+  const attr = makeNode('JSXAttribute', { name: { name: attrName } })
+  container.parent = attr
+  return child
+}
+
+function templateLiteralInJSXAttr(attrName: string, quasis: string[]) {
+  const node = makeNode('TemplateLiteral', {
+    quasis: quasis.map((raw) => ({ value: { raw } })),
+  })
+  const container = makeNode('JSXExpressionContainer')
+  node.parent = container
+  const attr = makeNode('JSXAttribute', { name: { name: attrName } })
+  container.parent = attr
+  return node
+}
+
+function templateLiteralInJSX(quasis: string[]) {
+  const node = makeNode('TemplateLiteral', {
+    quasis: quasis.map((raw) => ({ value: { raw } })),
+  })
+  const container = makeNode('JSXExpressionContainer')
+  node.parent = container
+  return node
 }
 
 // ─── no-literal-string ───────────────────────────────────────────────────────
@@ -313,6 +358,74 @@ describe('no-literal-string', () => {
     })
   })
 
+  describe('class/className expression containers', () => {
+    it('ignores literal in className={...}', () => {
+      const { context, reports } = createMockContext()
+      const visitor = rule.create(context)
+      visitor.Literal(jsxExprContainerInAttr('className', literal('flex items-center gap-2')))
+      expect(reports).toHaveLength(0)
+    })
+
+    it('ignores literal in class={...}', () => {
+      const { context, reports } = createMockContext()
+      const visitor = rule.create(context)
+      visitor.Literal(jsxExprContainerInAttr('class', literal('flex items-center gap-2')))
+      expect(reports).toHaveLength(0)
+    })
+
+    it('ignores binary expression in className={... + ...}', () => {
+      const { context, reports } = createMockContext()
+      const visitor = rule.create(context)
+      visitor.Literal(binaryInJSXAttr('className', literal('flex items-center')))
+      expect(reports).toHaveLength(0)
+    })
+
+    it('ignores binary expression in class={... + ...}', () => {
+      const { context, reports } = createMockContext()
+      const visitor = rule.create(context)
+      visitor.Literal(binaryInJSXAttr('class', literal('hidden md:block')))
+      expect(reports).toHaveLength(0)
+    })
+
+    it('ignores template literal in className={`...`}', () => {
+      const { context, reports } = createMockContext()
+      const visitor = rule.create(context)
+      const node = templateLiteralInJSXAttr('className', ['flex ', ' items-center'])
+      visitor.TemplateLiteral(node)
+      expect(reports).toHaveLength(0)
+    })
+
+    it('ignores template literal in class={`...`}', () => {
+      const { context, reports } = createMockContext()
+      const visitor = rule.create(context)
+      const node = templateLiteralInJSXAttr('class', ['container ', ' mx-auto'])
+      visitor.TemplateLiteral(node)
+      expect(reports).toHaveLength(0)
+    })
+
+    it('still reports literal in title={...}', () => {
+      const { context, reports } = createMockContext()
+      const visitor = rule.create(context)
+      visitor.Literal(jsxExprContainerInAttr('title', literal('Hello World')))
+      expect(reports).toHaveLength(1)
+    })
+
+    it('still reports template literal in non-class expression', () => {
+      const { context, reports } = createMockContext()
+      const visitor = rule.create(context)
+      const node = templateLiteralInJSX(['Hello ', ' World'])
+      visitor.TemplateLiteral(node)
+      expect(reports).toHaveLength(1)
+    })
+
+    it('ignores other technical JSX attrs in expression container (id, style, etc.)', () => {
+      const { context, reports } = createMockContext()
+      const visitor = rule.create(context)
+      visitor.Literal(jsxExprContainerInAttr('id', literal('my-section')))
+      expect(reports).toHaveLength(0)
+    })
+  })
+
   describe('Literal in binary expression inside JSX', () => {
     it('reports string concatenation in JSX', () => {
       const { context, reports } = createMockContext()
@@ -328,6 +441,22 @@ describe('no-literal-string', () => {
       const visitor = rule.create(context)
       visitor.JSXText(jsxText('API_KEY'))
       expect(reports).toHaveLength(0)
+    })
+
+    it('ignores short all-caps acronyms (API, URL, HTML)', () => {
+      const { context, reports } = createMockContext()
+      const visitor = rule.create(context)
+      for (const acronym of ['API', 'URL', 'HTML', 'CSS', 'JSON', 'ID']) {
+        visitor.JSXText(jsxText(acronym))
+      }
+      expect(reports).toHaveLength(0)
+    })
+
+    it('reports long all-caps strings (6+ chars, no underscore)', () => {
+      const { context, reports } = createMockContext()
+      const visitor = rule.create(context)
+      visitor.JSXText(jsxText('ABCDEF'))
+      expect(reports).toHaveLength(1)
     })
 
     it('ignores camelCase identifiers', () => {
@@ -572,7 +701,7 @@ describe('no-literal-string', () => {
       visitor.JSXText(jsxText(longText))
       expect(reports).toHaveLength(1)
       expect(reports[0].data!.text).toHaveLength(43) // 40 + '...'
-      expect(reports[0].data!.text).toEndWith('...')
+      expect(reports[0].data!.text.endsWith('...')).toBe(true)
     })
   })
 
@@ -846,8 +975,6 @@ describe('enforce-keys-sync', () => {
   beforeEach(() => {
     mkdirSync(resolve(localesDir, 'pt-BR'), { recursive: true })
     mkdirSync(resolve(localesDir, 'pt'), { recursive: true })
-    mkdirSync(resolve(localesDir, 'en'), { recursive: true })
-    // Create a package.json so resolveLocalesDir finds project root
     writeFileSync(resolve(fixtureDir, 'package.json'), '{}')
   })
 
@@ -920,9 +1047,8 @@ describe('enforce-keys-sync', () => {
     const visitor = rule.create(context)
     visitor.Program?.(makeNode('Program'))
 
-    // pt and en are both missing errors.json
     const missingReports = reports.filter((r) => r.messageId === 'missingKey')
-    expect(missingReports.length).toBeGreaterThanOrEqual(4) // 2 keys x 2 locales
+    expect(missingReports).toHaveLength(2) // 2 keys missing in pt
   })
 
   it('handles nested keys correctly', async () => {
@@ -951,6 +1077,7 @@ describe('enforce-keys-sync', () => {
   })
 
   it('reports no issues when locales are perfectly in sync', async () => {
+    mkdirSync(resolve(localesDir, 'en'), { recursive: true })
     const content = JSON.stringify({ save: 'Salvar', cancel: 'Cancelar' })
     writeFileSync(resolve(localesDir, 'pt-BR', 'common.json'), content)
     writeFileSync(resolve(localesDir, 'pt', 'common.json'), content)
