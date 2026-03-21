@@ -25,5 +25,8 @@
   },
   "publishConfig": {
     "registry": "https://npm.pkg.github.com/"
+  },
+  "dependencies": {
+    "@cspell/dict-pt-br": "^2.4.2"
   }
 }

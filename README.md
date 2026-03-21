@@ -97,6 +97,17 @@ In your `tsconfig.json`:
 }
 ```
 
+### cspell
+
+Create `cspell.json` in your project:
+
+```json
+{
+  "import": ["@inspira-legal/dev-config/src/cspell.json"],
+  "words": ["your-project-specific-words"]
+}
+```
+
 ### Scripts
 
 ```json
