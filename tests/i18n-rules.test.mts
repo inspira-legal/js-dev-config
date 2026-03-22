@@ -1366,6 +1366,162 @@ describe('no-unused-keys', () => {
     expect(visitor).toEqual({})
   })
 
+  it('detects dynamic template literal t() with static prefix', async () => {
+    writeFileSync(
+      resolve(localesDir, 'pt-BR', 'errors.json'),
+      JSON.stringify({ network: { timeout: 'Timeout', refused: 'Recusado' } }),
+    )
+    // Code uses dynamic key: t(`errors.network.${errorType}`)
+    writeFileSync(resolve(sourceDir, 'app.tsx'), 'const x = t(`errors.network.${errorType}`)')
+
+    const plugin = await loadPlugin()
+    const rule = plugin.rules['no-unused-keys']
+    const { context, reports } = createMockContext({
+      filename: resolve(fixtureDir, 'src', 'app.tsx'),
+      options: [{ baseLocale: 'pt-BR', localesDir: 'locales', sourceDir: 'src' }],
+    })
+    const visitor = rule.create(context)
+    visitor.Program?.(makeNode('Program'))
+
+    // Both keys should be considered used via partial match on 'errors.network'
+    expect(reports).toHaveLength(0)
+  })
+
+  it('detects dynamic .t() template literal with static prefix', async () => {
+    writeFileSync(
+      resolve(localesDir, 'pt-BR', 'status.json'),
+      JSON.stringify({ active: 'Ativo', inactive: 'Inativo' }),
+    )
+    writeFileSync(resolve(sourceDir, 'app.tsx'), 'const x = i18n.t(`status.${value}`)')
+
+    const plugin = await loadPlugin()
+    const rule = plugin.rules['no-unused-keys']
+    const { context, reports } = createMockContext({
+      filename: resolve(fixtureDir, 'src', 'app.tsx'),
+      options: [{ baseLocale: 'pt-BR', localesDir: 'locales', sourceDir: 'src' }],
+    })
+    const visitor = rule.create(context)
+    visitor.Program?.(makeNode('Program'))
+
+    expect(reports).toHaveLength(0)
+  })
+
+  it('normalizes camelCase namespace to match snake_case file name', async () => {
+    // File is document_vault.json but code uses t('documentVault.X')
+    writeFileSync(
+      resolve(localesDir, 'pt-BR', 'document_vault.json'),
+      JSON.stringify({ title: 'Cofre', description: 'Descrição' }),
+    )
+    writeFileSync(resolve(sourceDir, 'app.tsx'), `const x = t('documentVault.title')`)
+
+    const plugin = await loadPlugin()
+    const rule = plugin.rules['no-unused-keys']
+    const { context, reports } = createMockContext({
+      filename: resolve(fixtureDir, 'src', 'app.tsx'),
+      options: [{ baseLocale: 'pt-BR', localesDir: 'locales', sourceDir: 'src' }],
+    })
+    const visitor = rule.create(context)
+    visitor.Program?.(makeNode('Program'))
+
+    // 'title' should be matched, only 'description' is unused
+    expect(reports).toHaveLength(1)
+    expect(reports[0].data!.key).toBe('document_vault.description')
+  })
+
+  it('normalizes camelCase namespace with dynamic template literal', async () => {
+    // File is application_errors.json but code uses t(`applicationErrors.${code}.title`)
+    writeFileSync(
+      resolve(localesDir, 'pt-BR', 'application_errors.json'),
+      JSON.stringify({
+        TIMEOUT: { title: 'Timeout', message: 'Msg' },
+        NOT_FOUND: { title: '404', message: 'Msg' },
+      }),
+    )
+    writeFileSync(
+      resolve(sourceDir, 'app.tsx'),
+      'const x = t(`applicationErrors.${code}.title`)',
+    )
+
+    const plugin = await loadPlugin()
+    const rule = plugin.rules['no-unused-keys']
+    const { context, reports } = createMockContext({
+      filename: resolve(fixtureDir, 'src', 'app.tsx'),
+      options: [{ baseLocale: 'pt-BR', localesDir: 'locales', sourceDir: 'src' }],
+    })
+    const visitor = rule.create(context)
+    visitor.Program?.(makeNode('Program'))
+
+    // All keys should be considered used via partial match on 'application_errors' (normalized from 'applicationErrors')
+    expect(reports).toHaveLength(0)
+  })
+
+  it('handles multiple_words snake_case namespace with camelCase usage', async () => {
+    writeFileSync(
+      resolve(localesDir, 'pt-BR', 'my_account.json'),
+      JSON.stringify({ profile: 'Perfil', settings: 'Configurações' }),
+    )
+    writeFileSync(resolve(sourceDir, 'app.tsx'), `t('myAccount.profile'); t('myAccount.settings')`)
+
+    const plugin = await loadPlugin()
+    const rule = plugin.rules['no-unused-keys']
+    const { context, reports } = createMockContext({
+      filename: resolve(fixtureDir, 'src', 'app.tsx'),
+      options: [{ baseLocale: 'pt-BR', localesDir: 'locales', sourceDir: 'src' }],
+    })
+    const visitor = rule.create(context)
+    visitor.Program?.(makeNode('Program'))
+
+    expect(reports).toHaveLength(0)
+  })
+
+  it('recognizes i18next plural suffixes as used via base key', async () => {
+    writeFileSync(
+      resolve(localesDir, 'pt-BR', 'items.json'),
+      JSON.stringify({
+        count_zero: 'Nenhum item',
+        count_one: '1 item',
+        count_other: '{{count}} itens',
+        unused: 'Não usado',
+      }),
+    )
+    // Code uses t('items.count', { count }) — i18next resolves _one/_other at runtime
+    writeFileSync(resolve(sourceDir, 'app.tsx'), `t('items.count', { count })`)
+
+    const plugin = await loadPlugin()
+    const rule = plugin.rules['no-unused-keys']
+    const { context, reports } = createMockContext({
+      filename: resolve(fixtureDir, 'src', 'app.tsx'),
+      options: [{ baseLocale: 'pt-BR', localesDir: 'locales', sourceDir: 'src' }],
+    })
+    const visitor = rule.create(context)
+    visitor.Program?.(makeNode('Program'))
+
+    // Only 'unused' should be reported; plural variants are matched via base key
+    expect(reports).toHaveLength(1)
+    expect(reports[0].data!.key).toBe('items.unused')
+  })
+
+  it('recognizes nested plural keys with camelCase namespace', async () => {
+    writeFileSync(
+      resolve(localesDir, 'pt-BR', 'document_vault.json'),
+      JSON.stringify({
+        card: { documents_one: '1 doc', documents_other: '{{count}} docs' },
+      }),
+    )
+    writeFileSync(resolve(sourceDir, 'app.tsx'), `t('documentVault.card.documents', { count })`)
+
+    const plugin = await loadPlugin()
+    const rule = plugin.rules['no-unused-keys']
+    const { context, reports } = createMockContext({
+      filename: resolve(fixtureDir, 'src', 'app.tsx'),
+      options: [{ baseLocale: 'pt-BR', localesDir: 'locales', sourceDir: 'src' }],
+    })
+    const visitor = rule.create(context)
+    visitor.Program?.(makeNode('Program'))
+
+    expect(reports).toHaveLength(0)
+  })
+
   it('handles multiple JSON files', async () => {
     writeFileSync(
       resolve(localesDir, 'pt-BR', 'common.json'),

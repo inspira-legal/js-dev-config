@@ -23,6 +23,43 @@ function collectKeys(obj, prefix = []) {
 }
 
 /**
+ * Converts a string between camelCase and snake_case.
+ * 'documentVault' → 'document_vault'
+ * 'document_vault' → 'documentVault'
+ * @param {string} str
+ * @returns {string}
+ */
+function camelToSnake(str) {
+  return str.replace(/[A-Z]/g, (c) => '_' + c.toLowerCase())
+}
+
+function snakeToCamel(str) {
+  return str.replace(/_([a-z])/g, (_, c) => c.toUpperCase())
+}
+
+/**
+ * i18next plural suffixes that should be stripped when checking key usage.
+ * e.g., 'documents_one' → 'documents', 'items_other' → 'items'
+ */
+const PLURAL_SUFFIXES = ['_zero', '_one', '_two', '_few', '_many', '_other']
+
+/**
+ * Strips i18next plural suffix from a key path's last segment.
+ * 'namespace.documents_one' → 'namespace.documents'
+ * 'namespace.key' → null (no suffix found)
+ * @param {string} key
+ * @returns {string | null}
+ */
+function stripPluralSuffix(key) {
+  for (const suffix of PLURAL_SUFFIXES) {
+    if (key.endsWith(suffix)) {
+      return key.slice(0, -suffix.length)
+    }
+  }
+  return null
+}
+
+/**
  * Reads and parses a JSON file from disk.
  * @param {string} filePath
  * @returns {Record<string, unknown> | null}
@@ -522,6 +559,13 @@ function scanSourceForUsedKeys(sourceDir) {
   const tCallRegex2 = /(?:^|[^.\w])t\(\s*[`'"]([\w.]+)[`'"]/g
   const transRegex = /i18nKey\s*=\s*[`'"]([\w.]+)[`'"]/g
 
+  // Patterns for template literals with dynamic segments:
+  //   t(`namespace.${var}`)  t(`namespace.key.${var}.suffix`)
+  //   .t(`namespace.${var}`)
+  // Extracts the static prefix before the first ${...}
+  const tTemplateDynamic = /\.t\(\s*`([\w.]+)\.\$\{/g
+  const tTemplateDynamic2 = /(?:^|[^.\w])t\(\s*`([\w.]+)\.\$\{/g
+
   function scanDir(dir) {
     let entries
     try {
@@ -548,11 +592,24 @@ function scanSourceForUsedKeys(sourceDir) {
         continue
       }
 
-      for (const regex of [tCallRegex, tCallRegex2, transRegex]) {
+      for (const regex of [tCallRegex, tCallRegex2, transRegex, tTemplateDynamic, tTemplateDynamic2]) {
         regex.lastIndex = 0
         let match
         while ((match = regex.exec(content)) !== null) {
-          usedKeys.add(match[1])
+          const key = match[1]
+          usedKeys.add(key)
+          // Also add the snake_case/camelCase variant of the namespace prefix
+          // so t('documentVault.X') matches file namespace 'document_vault'
+          const dotIdx = key.indexOf('.')
+          if (dotIdx > 0) {
+            const ns = key.slice(0, dotIdx)
+            const rest = key.slice(dotIdx)
+            usedKeys.add(camelToSnake(ns) + rest)
+            usedKeys.add(snakeToCamel(ns) + rest)
+          } else {
+            usedKeys.add(camelToSnake(key))
+            usedKeys.add(snakeToCamel(key))
+          }
         }
       }
     }
@@ -639,8 +696,9 @@ const noUnusedKeys = {
 
             if (ignorePatterns.some((re) => re.test(fullKey) || re.test(key))) continue
 
-            if (!usedKeys.has(fullKey)) {
-              // Check partial matches (parent key used dynamically)
+            // Check direct match, plural base form, or partial prefix match
+            const baseKey = stripPluralSuffix(fullKey)
+            if (!usedKeys.has(fullKey) && !(baseKey && usedKeys.has(baseKey))) {
               const keyParts = fullKey.split('.')
               const hasPartialMatch = keyParts.some((_, i) => {
                 const partial = keyParts.slice(0, i + 1).join('.')
