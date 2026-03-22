@@ -340,6 +340,25 @@ describe('no-literal-string', () => {
       visitor.Literal(jsxAttr('tooltip', literal('Help text')))
       expect(reports).toHaveLength(0)
     })
+
+    it('reports literals in checkAttributes custom attrs', () => {
+      const { context, reports } = createMockContext({
+        options: [{ checkAttributes: ['tooltip', 'message'] }],
+      })
+      const visitor = rule.create(context)
+      visitor.Literal(jsxAttr('tooltip', literal('Help text')))
+      expect(reports).toHaveLength(1)
+    })
+
+    it('does not report non-user-facing custom attrs', () => {
+      const { context, reports } = createMockContext({
+        options: [{ checkAttributes: ['tooltip'] }],
+      })
+      const visitor = rule.create(context)
+      // 'message' is not in checkAttributes, so it should be ignored
+      visitor.Literal(jsxAttr('message', literal('Hello World')))
+      expect(reports).toHaveLength(0)
+    })
   })
 
   describe('Literal in JSX expression container', () => {

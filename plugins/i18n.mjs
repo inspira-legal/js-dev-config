@@ -230,7 +230,12 @@ const noLiteralString = {
           ignoreAttributes: {
             type: 'array',
             items: { type: 'string' },
-            description: 'Additional JSX attribute names to ignore',
+            description: 'Additional JSX attribute names to ignore (technical, not user-facing)',
+          },
+          checkAttributes: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Additional JSX attribute names that contain user-facing text and should be checked',
           },
           ignoreCallee: {
             type: 'array',
@@ -251,6 +256,7 @@ const noLiteralString = {
   create(context) {
     const options = context.options[0] || {}
     const extraIgnoreAttrs = new Set(options.ignoreAttributes || [])
+    const extraCheckAttrs = new Set(options.checkAttributes || [])
     const ignoreCalleePatterns = (options.ignoreCallee || []).map((p) => new RegExp(p))
     const ignoreStringPatterns = (options.ignorePatterns || []).map((p) => new RegExp(p))
 
@@ -370,7 +376,7 @@ const noLiteralString = {
         if (parent?.type === 'JSXAttribute') {
           const attrName = parent.name?.name
           if (TECHNICAL_JSX_ATTRS.has(attrName) || extraIgnoreAttrs.has(attrName)) return
-          if (USER_FACING_JSX_ATTRS.has(attrName)) {
+          if (USER_FACING_JSX_ATTRS.has(attrName) || extraCheckAttrs.has(attrName)) {
             reportLiteral(node, value)
             return
           }
